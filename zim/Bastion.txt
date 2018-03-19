@@ -1,0 +1,13 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-10-30T09:35:49+01:00
+
+====== Bastion ======
+Created lundi 30 octobre 2017
+
+docker-compose down
+
+ssh [login]@172.17.0.8
+sshair0web0l pour l'integ d'airbus par exemple
+
+mysql -h [host] -u [login] -p

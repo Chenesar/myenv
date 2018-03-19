@@ -1,0 +1,23 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2018-01-16T08:39:47+01:00
+
+====== Dump Integ Airbus ======
+Created mardi 16 janvier 2018
+
+Récup integ :
+
+ssh #login#@172.17.0.8
+sshair0web0l
+cd /home/castelis/www/integ
+mysqldump -h mysql-server --single-transaction --add-drop-trigger -uairbus_int -p8CM8XVFS82HrGqg airbus > dumpinteg_#date#.sql
+tar cvzf dumpinteg_#date#.tar.gz dumpinteg_#date#.sql
+rm dumpinteg_#date#.sql
+
+autre terminal:
+ssh #login#@172.17.0.8
+choix air0web0l
+cd /home/CASTELIS/etrang/partages/air0web0l/castelis/www/integ
+
+se rendre dans le répertoire ou l'on veux récupérer le dump
+scp #login#@172.17.0.8:/home/CASTELIS/etrang/partages/air0web0l/castelis/www/integ/dumpinteg_#date#.tar.gz .

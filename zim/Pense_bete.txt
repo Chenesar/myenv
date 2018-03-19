@@ -1,0 +1,12 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-09-13T10:54:16+02:00
+
+====== Pense bete ======
+Created mercredi 13 septembre 2017
+
+
+CRON :
+docker-compose exec php bash
+php vendor/castelis/logi-ce/sandbox/cli/launch.php --route cron/launchJob --task #NOM_CRON#
+

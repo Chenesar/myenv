@@ -1,0 +1,42 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-11-24T12:09:14+01:00
+
+====== Dump V4 ======
+Created vendredi 24 novembre 2017
+
+Connection au serveur :
+ssh #login#@172.17.0.8
+sshlogi-ce-iwbd01lx
+sudo -u www-data /bin/bash
+docker exec -ti v4 bash
+
+Crée le dump
+mysqldump --single-transaction -uroot -proot airbus > dumpv4_#date#.sql
+tar cvzf dumpv4_#date#.tar.gz dumpv4_#date#.sql
+rm dumpv4_#date#.sql
+
+Sortir du docker.
+exit
+
+On ce place sur le dossier de partage du serveur:
+cd [[../castelis/www/airbus.castelis.net/]]
+
+Copie du fichier de docker au serveur:
+docker cp v4:/var/www/project/dumpv4_#date#.tar.gz .
+
+Quitte le serveur
+exit
+
+Relancer un terminal en ssh :
+(specifique liste perso)
+./menu
+choix logi-ce-iwbd01lx
+cd partages/logi-ce-iwbd01lx/castelis/www/airbus.castelis.net/
+pwd (pour récuperer path complet)
+
+Sur machine local sans fermer l'autre terminal:
+se rendre dans le répertoire ou l'on veux récupérer le dump
+scp #login#@172.17.0.8:/home/CASTELIS/#login#/partages/logi-ce-iwbd01lx/castelis/www/airbus.castelis.net/dumpv4_#date#.tar.gz .
+décompresser l'archive
+

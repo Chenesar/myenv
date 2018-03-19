@@ -1,0 +1,28 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-11-27T14:29:23+01:00
+
+====== Alias ======
+Created lundi 27 novembre 2017
+
+alias adu='cd /home/eric/Project/AIRBUS/ && dockerenv dev && dockerenv dev && docker-compose up'
+alias agdu='cd /home/eric/Project/AGOSPAP/ && dockerenv dev && dockerenv dev && docker-compose up'
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+alias cdago='cd /home/eric/Project/AGOSPAP/'
+alias cdair='cd /home/eric/Project/AIRBUS/'
+alias cdgun='cd /home/eric/Project/Gun/Intranet/'
+alias cdgunapi='cd /home/eric/Project/Gun/Intranet/extranet/client/public/api/'
+alias delairlog='echo > /home/eric/Project/AIRBUS/log/log'
+alias deletelogair='cdair && cd log && echo > log'
+alias dockerbash='dockerenv dev && dockerenv dev && docker-compose exec php bash'
+alias egrep='egrep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias gdu='cd /home/eric/Project/docker/dockergun/ && docker-compose up'
+alias gitl='git log --graph --pretty=format:'\''%Cred%h%Creset -%C(auto)%d%Creset %s %Cgreen(%ci) %C(bold blue)<%an>%Creset%n'\'''
+alias gitpwl='git push --force-with-lease'
+alias grep='grep --color=auto'
+alias l='ls -CF'
+alias la='ls -A'
+alias ll='ls -alF'
+alias logice='cd vendor/castelis/logi-ce'
+alias ls='ls --color=auto'

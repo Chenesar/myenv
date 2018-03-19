@@ -1,0 +1,27 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-09-13T10:54:39+02:00
+
+====== SQL ======
+Created mercredi 13 septembre 2017
+
+Exemple SQL heritage : 
+SELECT VI.*
+FROM NOEUDS N
+INNER JOIN VISIBILITES VI on
+					VI.id =(
+						SELECT
+							V.id
+						FROM
+							VISIBILITES V
+						INNER JOIN NOEUDS NP ON
+							V.visibilite_noeud = NP.id
+							and NP.date_suppression is null
+						WHERE
+							V.herite_menu_id = 0
+							AND N.gauche >= NP.gauche
+							and N.droite <= NP.droite
+							and N.niveau >= NP.niveau
+						ORDER BY
+							NP.niveau DESC LIMIT 1)
+WHERE N.id = 298

@@ -1,0 +1,13 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2017-11-29T09:24:13+01:00
+
+====== Mise en ... ======
+Created mercredi 29 novembre 2017
+
+MEP :
+AIRBUS : Connexion a la prod vie ssh etrang@127.17.0.8
+choisir air0web2l opour la prod
+mettre les droits www : sudo -u www-data bash
+allez dans le repertoire [[/home/castelis/www/]]
+ensuite lancer le batch : [[./install.sh]] [TAG AIRBUS]  (composer a jour avec les dependances)

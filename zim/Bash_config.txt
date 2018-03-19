@@ -1,0 +1,24 @@
+Content-Type: text/x-zim-wiki
+Wiki-Format: zim 0.4
+Creation-Date: 2018-03-21T17:11:08+01:00
+
+====== Bash config ======
+Created mercredi 21 mars 2018
+
+echo -e "\033[1;31mInstalling Prompt...\033[0m"
+
+DIR="$(cd $( dirname $0) && pwd)"
+
+if [ ! -d ~/.liquidprompt ]; then
+  git clone https://github.com/nojhan/liquidprompt.git ~/.liquidprompt
+else
+  cd ~/.liquidprompt && git pull
+fi
+
+if [ -f ~/.bashrc ]; then
+  rm ~/.bashrc
+fi
+ln -sf $DIR/home/.bash_profile ~/.bash_profile
+ln -sf $DIR/home/.bashrc ~/.bashrc
+ln -sf $DIR/home/.bash_completion ~/.bash_completion
+ln -sf $DIR/home/.bash_completions ~/.bash_completions
