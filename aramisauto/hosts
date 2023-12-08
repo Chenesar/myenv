@@ -1,0 +1,20 @@
+127.0.0.1	localhost
+127.0.1.1	eritrang-Latitude-7490
+127.0.0.1 api.aa.test cohiba.aa.test ais.aa.test cmc.aa.test cms.aa.test company.aa.test crm.aa.test docservice.aa.test flashboard.aa.test robusto.aa.test sps.aa.test supplychain.aa.test uxr.aa.test v7.aa.test apache.v7.aa.test ws.aa.test administrative-procedures-service.aa.test upload-documents.aa.test corona.aa.test order-api.aa.test messaging.aa.test rfm.aa.test rfm-api.aa.test offer-api.aa.test funding.aa.test montecristo.aa.test accesories.aa.test clients.aa.test elasticsearch-144.aa.test elasticsearch-640.aa.test rabbitmq.management.aa.test rabbitmq.worker.aa.test maildev.aa.test traefik.aa.test funding-api.aa.test rgpd.aa.test test-api.aa.test salesforce-api.aa.test
+
+127.0.0.1 myapp.aa.test financingcetelemsimulation.aa.test financing-calculator.aa.test financing-adapter-lizauto.aa.test financing-adapter-psa.aa.test financing-contract-manager.aa.test sauron.aa.test financing-project-manager.aa.test financing-transmitter.aa.test financing-adapter-cetelem.aa.test financing-contract-manager.aa.test financing-historizer.aa.test chronos.aa.test financing-exporter.aa.test additional-services-exporter.aa.test order-api.aa.test order-backoffice.aa.test
+
+192.168.253.250 batch
+192.168.253.240 bastion
+192.168.251.16 rcps1.paas.aramisauto.com
+192.168.251.21 rcps2.paas.aramisauto.com
+192.168.251.22 rcps3.paas.aramisauto.com
+192.168.251.50 rcps5.paas.aramisauto.com
+192.168.251.51 rcps6.paas.aramisauto.com
+
+# The following lines are desirable for IPv6 capable hosts
+::1     ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters

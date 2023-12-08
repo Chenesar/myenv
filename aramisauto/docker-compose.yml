@@ -1,0 +1,894 @@
+version: '3.5'
+
+networks:
+  dbgp-proxy:
+    external:
+      name: dbgp-proxy
+  proxy:
+    external:
+      name: proxy
+  sftp:
+    name: sftp
+  financing:
+
+volumes:
+  elasticsearch_1_4_4:
+  rabbitmq:
+  dbdata:
+
+services:
+  crm:
+    image: aramisauto/crm:dev.${CRM_APACHE_VERSION-master}.apache
+    build:
+      context: ./crm
+      dockerfile: ./infrastructure/apache/dev/Dockerfile
+      args:
+        PACKAGES_DEV: rsync vim-nox
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN:-""}
+    depends_on:
+        - memcached
+        - ws
+        - api
+    environment:
+      ABT_USER: staging
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-aa.test}
+      TEAM_PAAS: ${TEAM_PAAS}
+    extra_hosts:
+      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+      - "s3-staging.aramisauto.com:104.20.10.158"
+      - "elasticsearch_1_4_4:${DP_ES1_IP-192.168.251.190}"
+      - "elasticsearch_6_4_0:${DP_ES6_IP-192.168.251.189}"
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:crm${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+      traefik.frontend.headers.SSLRedirect: "true"
+      traefik.port: 8080
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    volumes:
+      - ./crm:/usr/local/app
+      - ~/.ssh:/home/app/.ssh
+    working_dir: /usr/local/app
+
+  ws:
+    build:
+      context: ./ws
+      dockerfile: ./infrastructure/apache/staging/Dockerfile
+      args:
+        PACKAGES_DEV: rsync vim-nox
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN:-""}
+    image: aramisauto/ws:staging.master.apache-php
+    environment:
+      ABT_USER: staging
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:io${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test},ws${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    volumes:
+      - ./ws:/usr/local/app
+      - ~/.ssh:/home/app/.ssh
+    working_dir: /usr/local/app
+    extra_hosts:
+      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+      - "s3-staging.aramisauto.com:104.20.10.158"
+      - "elasticsearch_1_4_4:${ES_1_4_IP-192.168.251.190}"
+      - "elasticsearch_6_4_0:${ES_6_4_IP-192.168.251.189}"
+    depends_on:
+      - memcached
+      - elasticsearch_1_4_4
+      - rabbitmq
+    command:
+      - /bin/bash
+      - -c
+      - |
+          apache2-foreground
+  
+#  ws_consumer_unit_reindexation:
+#    build:
+#      context: ./ws
+#      dockerfile: ./infrastructure/php/cli/staging/Dockerfile
+#      args:
+#        PACKAGES_DEV: rsync vim-nox
+#        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN:-""}
+#    image: aramisauto/ws:staging.${WS_CONSUMER_VERSION-latest}.php-consumer-unit-reindexation
+#    restart: always
+#    environment:
+#      ABT_USER: staging
+#    networks:
+#      - dbgp-proxy
+#      - financing
+#    volumes:
+#      - ./ws:/usr/local/src/app
+#    working_dir: /usr/local/src/app
+#    extra_hosts:
+#      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+#    depends_on:
+#      - memcached
+#      - elasticsearch_1_4_4
+#      - rabbitmq
+#    command:
+#      - /bin/bash
+#      - -c
+#      - |
+#          wait-for-it -t 20 --strict memcached:11211 -- wait-for-it -t 20 --strict rabbitmq:5672 -- wait-for-it -t 20 --strict elasticsearch_1_4_4:9200 -- /usr/local/src/app/src/app/console --no-debug --env=prod rabbitmq:consumer -w -l 64 unit_reindexation
+
+#  docservice:
+#    image: aramisauto/docservice:staging.latest.apache-php
+#    labels:
+#      traefik.enable: "true"
+#      traefik.frontend.rule: "Host:docservice${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+#      traefik.docker.network: proxy
+#      traefik.frontend.entryPoints: http,https
+#    networks:
+#      - dbgp-proxy
+#      - proxy
+#      - financing
+#    depends_on:
+#      - elasticsearch_1_4_4
+#      - rabbitmq
+#    extra_hosts:
+#      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+#      - "s3-staging.aramisauto.com:104.20.10.158"
+
+  api:
+    image: aramisauto/api:staging.latest.apache-php
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:api${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    extra_hosts:
+      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+    depends_on:
+      - memcached
+  memcached:
+    image: memcached:1.5.3-alpine
+    networks:
+      - financing
+  elasticsearch_1_4_4:
+    image: elasticsearch:1.4.4
+    environment:
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "cluster.name=aramisauto"
+      - "node.name=elasticsearch_1_4_4"
+      - "network.host=0.0.0.0"
+      - "http.host=0.0.0.0"
+      - "http.port=9200"
+      - "transport.host=0.0.0.0"
+      - "transport.tcp.port=9300"
+      - "transport.tcp.compress=true"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch_1_4_4"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: volume
+        source: elasticsearch_1_4_4
+        target: /var/lib/elasticsearch
+    labels:
+      traefik.enable: "true"
+      traefik.elasticsearch-144.port: "9200"
+      traefik.elasticsearch-144.frontend.rule: "Host:elasticsearch-144${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+    networks:
+      - proxy
+      - financing
+
+  rabbitmq:
+    image: aramisauto/rabbitmq:staging.3.7.7.management
+    labels:
+      traefik.enable: "true"
+      traefik.management.port: "15672"
+      traefik.management.frontend.rule: "Host:rabbitmq.management${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.worker.port: "5672"
+      traefik.worker.frontend.rule: "Host:rabbitmq.worker${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+    volumes:
+      - type: volume
+        source: rabbitmq
+        target: /var/lib/rabbitmq
+    networks:
+      - financing
+      - proxy
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5672" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
+
+  maildev:
+    image: djfarrelly/maildev:1.0.0-rc2
+    labels:
+      traefik.docker.network: proxy
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:maildev${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.port: "80"
+    networks:
+      - proxy
+      - financing
+
+  funding_api_fpm:
+      image: aramisauto/funding-api:prod.latest.php-fpm
+      extra_hosts:
+          - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+      env_file:
+          - ./funding-api/.env
+      networks:
+          - dbgp-proxy
+          - proxy
+          - financing
+      volumes:
+          - ./funding-api/var/log/:/usr/local/src/app/var/log/
+          - ./funding-api/:/usr/local/src/app
+
+  funding_api_nginx:
+      image: aramisauto/funding-api:prod.latest.nginx
+      depends_on:
+            - funding_api_fpm
+      environment:
+            PHPFPM_SERVICE: funding_api_fpm
+      env_file:
+            - ./funding-api/.env
+      networks:
+            - dbgp-proxy
+            - proxy
+            - financing
+      labels:
+            traefik.enable: "true"
+            traefik.frontend.rule: "Host:funding-api${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+            traefik.docker.network: proxy
+            traefik.frontend.entryPoints: http,https
+
+#  funding_api_fpm:
+#    build:
+#      context: ./funding-api
+#      dockerfile: ./infrastructure/php/fpm/staging/Dockerfile
+#      args:
+#        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN}
+#    extra_hosts:
+#      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+#    env_file:
+#      - ./funding-api/.env
+#    image: aramisauto/funding-api:staging.${FUNDING_API_FPM_VERSION-latest}.php-fpm²
+#    networks:
+#      - dbgp-proxy
+#      - proxy
+#      - financing
+#    volumes:
+#      - ./funding-api:/usr/local/src/app
+#      - ~/.composer:/home/app/.composer
+#      - ~/.ssh:/home/app/.ssh
+#    healthcheck:
+#      test: curl -f http://funding_api_nginx/monitoring/health_check || exit 1
+#      interval: 180s
+#      timeout: 10s
+#      retries: 3
+
+#  funding_api_nginx:
+#    build:
+#      context: ./funding-api
+#      dockerfile: ./infrastructure/nginx/staging/Dockerfile
+#    depends_on:
+#      - funding_api_fpm
+#    environment:
+#      PHPFPM_SERVICE: funding_api_fpm
+#    env_file:
+#      - ./funding-api/.env
+#    image: aramisauto/funding-api:staging.${FUNDING_API_NGINX_VERSION-latest}.nginx
+#    networks:
+#      - dbgp-proxy
+#      - proxy
+#      - financing
+#    labels:
+#      traefik.enable: "true"
+#      traefik.frontend.rule: "Host:funding-api${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+#      traefik.docker.network: proxy
+#      traefik.frontend.entryPoints: http,https
+#    volumes:
+#      - ./funding-api:/usr/local/src/app
+
+  financing_calculator_fpm:
+    build:
+      context: ./financing-calculator
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/financing_calculator:prod.${FINANCING_CALCULATOR_FPM_VERSION-latest}.php-fpm
+    environment:
+      APPDYNAMICS_TIER_NAME: fpm
+    env_file:
+      - ./financing-calculator/appdynamics.env
+      - ./financing-calculator/.env.dev
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-calculator/:/usr/local/src/app
+
+  financing_calculator_nginx:
+    build:
+      context: ./financing-calculator
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_calculator_fpm
+    image: aramisauto/financing_calculator:prod.${FINANCING_CALCULATOR_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_calculator_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-calculator${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-calculator/public:/usr/local/src/app/public
+
+#  financing_calculator_fpm:
+#    build:
+#      context: ./financing-calculator
+#      dockerfile: ./infrastructure/php/fpm/prod/Dockerfile
+#    environment:
+#      APPDYNAMICS_TIER_NAME: fpm
+#    env_file:
+#      - ./financing-calculator/.env
+#      - ./financing-calculator/appdynamics.env
+#    networks:
+#      - dbgp-proxy
+#      - financing
+
+#  financing_calculator_nginx:
+#    build:
+#      context: ./financing-calculator
+#      dockerfile: ./infrastructure/nginx/prod/Dockerfile
+#      args:
+#        PHPFPM_SERVICE: financing_calculator_fpm
+#    depends_on:
+#      - financing_calculator_fpm
+#    env_file:
+#      - ./financing-calculator/.env
+#      - ./financing-calculator/appdynamics.env
+#    networks:
+#      - proxy
+#      - financing
+#    labels:
+#      traefik.enable: "true"
+#      traefik.frontend.rule: "Host:financing-calculator${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+#      traefik.docker.network: proxy
+#      traefik.frontend.entryPoints: http,https
+
+  financing_adapter_psa_fpm:
+    build:
+      context: ./financing-adapter-psa
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+      args:
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN}
+    #image: aramisauto/financing_adapter_psa:dev.${FINANCING_ADAPTER_PSA_FPM_VERSION-latest}.php-fpm
+    env_file:
+      - ./financing-adapter-psa/.env
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-adapter-psa/:/usr/local/app
+
+  financing_adapter_psa_nginx:
+    build:
+      context: ./financing-adapter-psa
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_adapter_psa_fpm
+    image: aramisauto/financing_adapter_psa:dev.${FINANCING_ADAPTER_PSA_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_adapter_psa_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-adapter-psa${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+      traefik.port: 8080
+    volumes:
+      - ./financing-adapter-psa/public:/usr/local/app/public
+
+  financing_project_manager_fpm:
+    build:
+      context: ./financing-project-manager
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/financing_project_manager:prod.${FINANCING_PROJECT_MANAGER_FPM_VERSION-latest}.php-fpm
+    environment:
+      APPDYNAMICS_TIER_NAME: fpm
+    env_file:
+      - ./financing-project-manager/appdynamics.env
+      - ./financing-project-manager/.env.dev
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-project-manager/:/usr/local/src/app
+
+  financing_project_manager_nginx:
+    build:
+      context: ./financing-project-manager
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_project_manager_fpm
+    image: aramisauto/financing_project_manager:prod.${FINANCING_PROJECT_MANAGER_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_project_manager_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-project-manager${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-project-manager/public:/usr/local/src/app/public
+
+  # financing_project_manager_salesforce:
+  #   build:
+  #     context: ./financing-project-manager
+  #     dockerfile: ./infrastructure/php/cli/dev/Dockerfile
+  #   image: aramisauto/financing_project_manager:dev.${FINANCING_PROJECT_MANAGER_FPM_VERSION-latest}.php-cli
+  #   restart: always
+  #   environment:
+  #     APP_CONSOLE_ARGS: swarrot:consume:financing_project_manager_consumer -vvv
+  #   depends_on:
+  #     - rabbitmq
+  #   networks:
+  #     - dbgp-proxy
+  #     - proxy
+  #     - financing
+  #   volumes:
+  #     - ./financing-project-manager/:/usr/local/src/app
+
+  financing_transmitter_fpm:
+    build:
+      context: ./financing-transmitter
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    environment:
+      APPDYNAMICS_TIER_NAME: fpm
+    #image: aramisauto/financing-transmitter:staging.latest.php-fpm
+    env_file:
+      - ./financing-transmitter/appdynamics.env
+      - ./financing-transmitter/.env.dev
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-transmitter/:/usr/local/src/app
+
+  financing_transmitter_nginx:
+    build:
+      context: ./financing-transmitter
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_transmitter_fpm
+    #image: aramisauto/financing-transmitter:staging.latest.nginx
+    extra_hosts:
+      - "financing-project-manager.aa.test:${FINANCING_PROJECT_MANAGER_IP-172.28.1.1}"
+      - "financing-adapter-cetelem.aa.test:${FINANCING_ADAPTER_CETELEM_IP-172.28.1.1}"
+    depends_on:
+      - financing_transmitter_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-transmitter${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-transmitter/public:/usr/local/src/app/public
+
+  financing_adapter_cetelem_fpm:
+    build:
+      context: ./financing-adapter-cetelem
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    environment:
+      APPDYNAMICS_TIER_NAME: fpm
+    env_file:
+      - ./financing-adapter-cetelem/appdynamics.env
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-adapter-cetelem/:/usr/local/src/app
+
+  financing_adapter_cetelem_nginx:
+    build:
+      context: ./financing-adapter-cetelem
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_adapter_cetelem_fpm
+    depends_on:
+      - financing_adapter_cetelem_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-adapter-cetelem${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-adapter-cetelem/public:/usr/local/src/app/public
+
+  financing_contract_manager_fpm:
+    build:
+      context: ./financing-contract-manager
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/financing_contract_manager:prod.${FINANCING_CONTRACT_MANAGER_FPM_VERSION-latest}.php-fpm
+    environment:
+      APPDYNAMICS_TIER_NAME: fpm
+    env_file:
+      - ./financing-contract-manager/appdynamics.env
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-contract-manager/:/usr/local/src/app
+
+  financing_contract_manager_nginx:
+    build:
+      context: ./financing-contract-manager
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_contract_manager_fpm
+    image: aramisauto/financing_contract_manager:prod.${FINANCING_CONTRACT_MANAGER_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_contract_manager_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-contract-manager${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-contract-manager/public:/usr/local/src/app/public
+
+  financing_historizer_fpm:
+    build:
+      context: ./financing-historizer
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/financing_historizer:prod.${FINANCING_HISTORIZER_FPM_VERSION-latest}.php-fpm
+    environment:
+      APPDYNAMICS_AGENT_TIER_NAME: fpm
+    env_file:
+      - ./financing-historizer/appdynamics.env
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-historizer/:/usr/local/src/app
+
+  financing_historizer_nginx:
+    build:
+      context: ./financing-historizer
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_historizer_fpm
+    image: aramisauto/financing_historizer:prod.${FINANCING_HISTORIZER_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_historizer_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-historizer${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./financing-historizer/public:/usr/local/src/app/public
+
+  circuit_breaker_bundle_fpm:
+    build:
+      context: ./circuit-breaker-bundle
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    volumes:
+      - ./circuit-breaker-bundle:/usr/local/src/app
+
+  financing_historizer_consumer:
+    build:
+      context: ./financing-historizer
+      dockerfile: ./infrastructure/php/cli/dev/Dockerfile
+    image: aramisauto/financing_historizer:dev.${FINANCING_HISTORIZER_CLI_VERSION-latest}.cli
+    environment:
+      APP_CONSOLE_ARGS: swarrot:consume:history_event_consumer
+    networks:
+      - proxy
+      - financing
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./financing-historizer/:/usr/local/src/app
+
+  redis:
+    image: "redis:alpine"
+    command: redis-server --requirepass password01
+    ports:
+     - "6379:6379"
+    environment:
+     - REDIS_REPLICATION_MODE=master
+    networks:
+      - proxy
+      - financing
+
+  # synchronizeEs6:
+  #   image: aramisauto/mia:staging-lizauto-5-years-electric.php
+  #   environment:
+  #     - COHIBA_DATABASE_HOST=mysql_main
+  #     - COHIBA_DATABASE_PORT=3306
+  #     - COHIBA_DATABASE_NAME=cohiba
+  #     - COHIBA_DATABASE_USER=common
+  #     - COHIBA_DATABASE_PASSWORD=common
+  #     - CORONA_DATABASE_HOST=mysql_main
+  #     - CORONA_DATABASE_PORT=3306
+  #     - CORONA_DATABASE_NAME=corona
+  #     - CORONA_DATABASE_USER=common
+  #     - CORONA_DATABASE_PASSWORD=common
+  #     - EUROTAX_VO_DATABASE_HOST=mysql_main
+  #     - EUROTAX_VO_DATABASE_PORT=3306
+  #     - EUROTAX_VO_DATABASE_NAME=eurotax_vo
+  #     - EUROTAX_VO_DATABASE_USER=common
+  #     - EUROTAX_VO_DATABASE_PASSWORD=common
+  #     - EUROTAX_DATABASE_HOST=mysql_main
+  #     - EUROTAX_DATABASE_PORT=3306
+  #     - EUROTAX_DATABASE_NAME=eurotax
+  #     - EUROTAX_DATABASE_USER=common
+  #     - EUROTAX_DATABASE_PASSWORD=common
+  #     - RABBITMQ_OFFERS_OLD_HOST=rabbitmq
+  #     - RABBITMQ_OFFERS_OLD_PORT=5672
+  #     - RABBITMQ_OFFERS_OLD_USER=guest
+  #     - RABBITMQ_OFFERS_OLD_PASSWORD=guest
+  #     - RABBITMQ_OFFERS_OLD_VHOST=offers
+  #     - ELASTICSEARCH_HOST=192.168.251.189
+  #     - ELASTICSEARCH_PORT=9200
+  #     - ARAMIS_OFFER_CATALOG_DATA_API_CATALOG_URL=
+  #     - AWS_S3_KEY=
+  #     - AWS_S3_SECRET_KEY=
+  #     - AWS_S3_CATALOG_BUCKET_NAME=
+  #     - AWS_S3_CATALOG_VERSION=
+  #     - AWS_S3_CARDOEN_BUCKET_NAME=
+  #     - AWS_S3_CARDOEN_VERSION=
+  #     - EXPENDITURE_DOCUMENTS_URI=
+  #   extra_hosts:
+  #     - mysql_main:${DP_DATASOURCES_IP-192.168.251.3}
+  #     - elasticsearch_6_4_0:${ES_6_4_DAILY_IP-192.168.251.189}
+  #   command: /usr/local/src/mia/bin/console --no-debug --env=prod rabbitmq:consumer -w -l 128 synchronizeElasticsearchIndex -vvv
+  #   networks:
+  #     - proxy
+  #     - financing
+  #   depends_on:
+  #     - rabbitmq
+  #   restart: always
+
+  robusto:
+    image: aramisauto/robusto:dev.master.apache
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      TEAM_PAAS: ${TEAM_PAAS}
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:robusto${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    depends_on:
+      - memcached
+      - api
+      - ws
+    extra_hosts:
+      - "mysql_main:${DP_DATASOURCES_IP-192.168.251.3}"
+    volumes:
+      - ../robusto/:/usr/local/src/app
+    working_dir: /usr/local/src/app
+
+  additional_services_exporter_fpm:
+    build:
+      context: ./additional-services-exporter
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/additional-services-exporter:dev.${ADDITIONAL_SERVICES_EXPORTER_FPM_VERSION-latest}.php-fpm
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:additional-services-exporter${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./additional-services-exporter/:/usr/local/src/app
+
+  additional_services_exporter_nginx:
+    build:
+      context: ./additional-services-exporter
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: additional_services_exporter_fpm
+        CORS_HEADER: '.*' # TODO Replace this by a regex
+    image: aramisauto/additional-services-exporter:dev.${ADDITIONAL_SERVICES_EXPORTER_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - additional_services_exporter_fpm
+    networks:
+      - dbgp-proxy
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:additional-services-exporter${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./additional-services-exporter/public:/usr/local/src/app/public
+
+  financing_exporter_cli:
+    build:
+      context: ./financing-exporter
+      dockerfile: ./infrastructure/php/cli/dev/Dockerfile
+      args:
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN}
+    image: aramisauto/financing-exporter:dev.${FINANCING_EXPORTER_CLI_VERSION-latest}.php-cli
+    networks:
+      - dbgp-proxy
+      - sftp
+      - financing
+    volumes:
+      - ./financing-exporter:/usr/local/src/app
+
+  financing-sftp:
+    image: "emberstack/sftp"
+    ports:
+      - "2222:22"
+    volumes:
+      - ./financing-exporter/infrastructure/staging/sftp/sftp.json:/app/config/sftp.json:ro
+      - ./financing-exporter/sftp:/home/demo/sftp
+    networks:
+      - sftp
+
+  financing_exporter_fpm:
+    build:
+      context: ./financing-exporter
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+      args:
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN}
+    image: aramisauto/financing-exporter:dev.${FINANCING_EXPORTER_FPM_VERSION-latest}.php-fpm
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./financing-exporter/:/usr/local/src/app
+
+  financing_exporter_nginx:
+    build:
+      context: ./financing-exporter
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_exporter_fpm
+    image: aramisauto/financing-exporter:dev.${FINANCING_EXPORTER_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_exporter_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-exporter${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http
+    volumes:
+      - ./financing-exporter/public:/usr/local/src/app/public
+
+  financing_exporter_export_consumer:
+    build:
+      context: ./financing-exporter
+      dockerfile: ./infrastructure/php/cli/dev/Dockerfile
+    image: aramisauto/financing-exporter:prod.${FINANCING_EXPORTER_CLI_VERSION-latest}.php-cli
+    environment:
+      APP_CONSOLE_ARGS: swarrot:consume:financing_exporter_consumer
+    networks:
+      - proxy
+      - financing
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./financing-exporter:/usr/local/src/app
+
+  order_backoffice_fpm:
+    build:
+      context: ./order-backoffice
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+    image: aramisauto/order-backoffice:dev.${ORDER_BACKOFFICE_FPM_VERSION-latest}.php-fpm
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./order-backoffice:/usr/local/src/app
+
+  order_backoffice_nginx:
+    build:
+      context: ./order-backoffice
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: order_backoffice_fpm
+        CORS_HEADER: '.*' # TODO Replace this by a regex
+    image: aramisauto/order-backoffice:dev.${ORDER_BACKOFFICE_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - order_backoffice_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:order-backoffice${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http
+    volumes:
+      - ./order-backoffice/public:/usr/local/src/app/public
+
+  financing_adapter_lizauto_fpm:
+    build:
+      context: ./adapter-lizauto
+      dockerfile: ./infrastructure/php/fpm/dev/Dockerfile
+      args:
+        GITHUB_OAUTH_TOKEN: ${GITHUB_OAUTH_TOKEN}
+    #image: aramisauto/financing_adapter_lizauto:dev.${FINANCING_ADAPTER_LIZAUTO_FPM_VERSION-latest}.php-fpm
+    networks:
+      - dbgp-proxy
+      - financing
+    volumes:
+      - ./adapter-lizauto/:/usr/local/src/app
+
+  financing_adapter_lizauto_nginx:
+    build:
+      context: ./adapter-lizauto
+      dockerfile: ./infrastructure/nginx/dev/Dockerfile
+      args:
+        PHPFPM_SERVICE: financing_adapter_lizauto_fpm
+        CORS_HEADER: '.*' # TODO Replace this by a regex
+    #image: aramisauto/financing_adapter_lizauto:dev.${FINANCING_ADAPTER_LIZAUTO_NGINX_VERSION-latest}.nginx
+    depends_on:
+      - financing_adapter_lizauto_fpm
+    networks:
+      - proxy
+      - financing
+    labels:
+      traefik.enable: "true"
+      traefik.frontend.rule: "Host:financing-adapter-lizauto${TEAM_PAAS}.${COMPOSE_PROJECT_NAME-aa.test}"
+      traefik.docker.network: proxy
+      traefik.frontend.entryPoints: http,https
+    volumes:
+      - ./adapter-lizauto/public:/usr/local/src/app/public
